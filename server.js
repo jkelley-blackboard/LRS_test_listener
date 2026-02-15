@@ -6,9 +6,45 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Experience-API-Version'],
+    exposedHeaders: ['X-Experience-API-Version'],
+    credentials: true
+}));
 app.use(express.json());
 app.use(express.static('public'));
+
+// xAPI Version middleware - MUST be before routes
+app.use((req, res, next) => {
+    // Set xAPI version header on all responses
+    res.setHeader('X-Experience-API-Version', '1.0.3');
+    
+    // For xAPI endpoints, validate version
+    if (req.path.startsWith('/xapi/')) {
+        const clientVersion = req.headers['x-experience-api-version'];
+        
+        // Version is required for xAPI endpoints
+        if (!clientVersion) {
+            return res.status(400).json({
+                error: 'Bad Request',
+                message: 'X-Experience-API-Version header is required'
+            });
+        }
+        
+        // Support versions 1.0.0, 1.0.1, 1.0.2, 1.0.3
+        const supportedVersions = ['1.0.0', '1.0.1', '1.0.2', '1.0.3'];
+        if (!supportedVersions.includes(clientVersion)) {
+            return res.status(400).json({
+                error: 'Bad Request',
+                message: `xAPI Version ${clientVersion} is not supported. Supported versions: ${supportedVersions.join(', ')}`
+            });
+        }
+    }
+    
+    next();
+});
 
 // In-memory storage for statements
 let statements = [];
@@ -115,6 +151,16 @@ function generateUUID() {
 
 // API Routes
 
+// Handle OPTIONS preflight for CORS
+app.options('/xapi/statements', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Experience-API-Version');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    res.setHeader('X-Experience-API-Version', '1.0.3');
+    res.status(200).end();
+});
+
 // Get credentials (for initial setup)
 app.get('/api/credentials', (req, res) => {
     res.json({
@@ -129,7 +175,7 @@ app.get('/api/credentials', (req, res) => {
 app.post('/xapi/statements', validateAuth, (req, res) => {
     const statement = req.body;
     
-    console.log('📨 Received xAPI statement');
+    console.log('📨 Received xAPI statement (POST)');
     
     // Validate statement
     const validation = validateXAPIStatement(statement);
@@ -166,6 +212,62 @@ app.post('/xapi/statements', validateAuth, (req, res) => {
     // Return appropriate response
     if (validation.valid) {
         res.status(200).json([statement.id]);
+    } else {
+        res.status(400).json({
+            error: 'Bad Request',
+            message: 'Invalid xAPI statement',
+            errors: validation.errors
+        });
+    }
+});
+
+// xAPI Statements endpoint (PUT) - for single statement with ID in URL
+app.put('/xapi/statements', validateAuth, (req, res) => {
+    const statement = req.body;
+    const statementId = req.query.statementId;
+    
+    console.log('📨 Received xAPI statement (PUT)');
+    
+    // If statementId in query, use that
+    if (statementId) {
+        statement.id = statementId;
+    }
+    
+    // Validate statement
+    const validation = validateXAPIStatement(statement);
+    
+    // Add ID if not present
+    if (!statement.id) {
+        statement.id = generateUUID();
+    }
+    
+    // Add stored timestamp
+    const storedStatement = {
+        ...statement,
+        stored: new Date().toISOString()
+    };
+    
+    // Store statement
+    const record = {
+        id: statement.id,
+        statement: storedStatement,
+        timestamp: new Date().toISOString(),
+        valid: validation.valid,
+        errors: validation.errors
+    };
+    
+    statements.unshift(record);
+    
+    // Keep only last 1000 statements
+    if (statements.length > 1000) {
+        statements = statements.slice(0, 1000);
+    }
+    
+    console.log(`  ✓ Stored (${validation.valid ? 'VALID' : 'INVALID'}):`, statement.id);
+    
+    // Return appropriate response
+    if (validation.valid) {
+        res.status(204).end(); // PUT returns 204 No Content for success
     } else {
         res.status(400).json({
             error: 'Bad Request',
