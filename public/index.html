@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>xAPI LRS Listener</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+        }
+
+        .config-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .config-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .credential-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+        }
+
+        .credential-item {
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .credential-item code {
+            background: #e9ecef;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            word-break: break-all;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .copy-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .copy-btn:hover {
+            background: #5568d3;
+        }
+
+        .listener-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(102, 126, 234, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .test-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .test-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .test-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        }
+
+        .clear-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .clear-btn:hover {
+            background: #c82333;
+        }
+
+        .statements-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .statements-header {
+            background: #667eea;
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .statements-header h2 {
+            margin: 0;
+        }
+
+        .statements-list {
+            max-height: 600px;
+            overflow-y: auto;
+            padding: 20px 30px;
+        }
+
+        .statement {
+            background: #f8f9fa;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .statement.invalid {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+
+        .statement-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .statement-time {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .statement-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .statement-status.valid {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .statement-status.invalid {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .statement-content {
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #333;
+        }
+
+        .error-message {
+            color: #dc3545;
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .endpoint-info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #0066cc;
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            margin-left: 10px;
+        }
+
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 xAPI LRS Listener</h1>
+            <p>Experience API (xAPI) compliant Learning Record Store</p>
+            <div class="listener-status">
+                <span class="status-indicator"></span>
+                Server Active - Ready to receive statements
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                Configure Your xAPI Source System
+            </h3>
+
+            <div class="credential-display" id="credentialDisplay">
+                <strong>📍 Enter these values in your xAPI source system:</strong>
+                <div class="credential-item">
+                    <div style="min-width: 100px;"><strong>Endpoint:</strong></div>
+                    <code id="displayEndpoint">Loading...</code>
+                    <button class="copy-btn" onclick="copyToClipboard('endpoint')">Copy</button>
+                </div>
+                <div class="credential-item">
+                    <div style="min-width: 100px;"><strong>Key:</strong></div>
+                    <code id="displayKey">Loading...</code>
+                    <button class="copy-btn" onclick="copyToClipboard('key')">Copy</button>
+                </div>
+                <div class="credential-item">
+                    <div style="min-width: 100px;"><strong>Secret:</strong></div>
+                    <code id="displaySecret">Loading...</code>
+                    <button class="copy-btn" onclick="copyToClipboard('secret')">Copy</button>
+                </div>
+            </div>
+
+            <div class="endpoint-info">
+                <strong>💡 How to use:</strong><br>
+                1. Copy the endpoint, key, and secret above<br>
+                2. Enter them in your xAPI source system (LMS, course authoring tool, etc.)<br>
+                3. Your source system will send xAPI statements with Basic Authentication<br>
+                4. Watch statements appear below in real-time!
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Total Statements</h3>
+                <div class="value" id="totalCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Valid Statements</h3>
+                <div class="value" id="validCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Invalid Statements</h3>
+                <div class="value" id="invalidCount">0</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3 style="margin-bottom: 15px; color: #333;">Test the Listener</h3>
+            <button class="test-btn" onclick="sendTestStatement()">📤 Send Test xAPI Statement</button>
+            <button class="test-btn" style="background: #6c757d;" onclick="refreshStatements()">🔄 Refresh</button>
+        </div>
+
+        <div class="statements-container">
+            <div class="statements-header">
+                <h2>Received Statements</h2>
+                <div>
+                    <button class="refresh-btn" onclick="refreshStatements()">🔄 Refresh</button>
+                    <button class="clear-btn" onclick="clearStatements()">Clear All</button>
+                </div>
+            </div>
+            <div class="statements-list" id="statementsList">
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                    </svg>
+                    <p>No statements received yet</p>
+                    <p style="font-size: 14px; margin-top: 10px;">Send a test statement or configure your xAPI source</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let credentials = {};
+        let autoRefreshInterval;
+
+        // Initialize
+        async function init() {
+            await loadCredentials();
+            await refreshStatements();
+            
+            // Auto-refresh every 5 seconds
+            autoRefreshInterval = setInterval(refreshStatements, 5000);
+        }
+
+        // Load credentials from server
+        async function loadCredentials() {
+            try {
+                const response = await fetch('/api/credentials');
+                credentials = await response.json();
+                updateCredentialDisplay();
+            } catch (error) {
+                console.error('Error loading credentials:', error);
+            }
+        }
+
+        // Update credential display
+        function updateCredentialDisplay() {
+            document.getElementById('displayEndpoint').textContent = credentials.endpoint || 'Error loading';
+            document.getElementById('displayKey').textContent = credentials.key || 'Error loading';
+            document.getElementById('displaySecret').textContent = credentials.secret || 'Error loading';
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(field) {
+            let text = '';
+            
+            switch(field) {
+                case 'endpoint':
+                    text = credentials.endpoint;
+                    break;
+                case 'key':
+                    text = credentials.key;
+                    break;
+                case 'secret':
+                    text = credentials.secret;
+                    break;
+            }
+
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        // Refresh statements from server
+        async function refreshStatements() {
+            try {
+                const response = await fetch('/api/statements');
+                const data = await response.json();
+                
+                updateUI(data);
+            } catch (error) {
+                console.error('Error refreshing statements:', error);
+            }
+        }
+
+        // Update UI
+        function updateUI(data) {
+            document.getElementById('totalCount').textContent = data.total || 0;
+            document.getElementById('validCount').textContent = data.valid || 0;
+            document.getElementById('invalidCount').textContent = data.invalid || 0;
+
+            const listContainer = document.getElementById('statementsList');
+            
+            if (!data.statements || data.statements.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                        </svg>
+                        <p>No statements received yet</p>
+                        <p style="font-size: 14px; margin-top: 10px;">Send a test statement or configure your xAPI source</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listContainer.innerHTML = data.statements.map(record => `
+                <div class="statement ${record.valid ? '' : 'invalid'}">
+                    <div class="statement-header">
+                        <span class="statement-time">${new Date(record.timestamp).toLocaleString()}</span>
+                        <span class="statement-status ${record.valid ? 'valid' : 'invalid'}">
+                            ${record.valid ? '✓ VALID' : '✗ INVALID'}
+                        </span>
+                    </div>
+                    <div class="statement-content">${JSON.stringify(record.statement, null, 2)}</div>
+                    ${!record.valid ? `
+                        <div class="error-message">
+                            <strong>Validation Errors:</strong><br>
+                            ${record.errors.map(e => `• ${e}`).join('<br>')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Clear all statements
+        async function clearStatements() {
+            if (!confirm('Are you sure you want to clear all statements?')) {
+                return;
+            }
+
+            try {
+                await fetch('/api/statements', { method: 'DELETE' });
+                await refreshStatements();
+            } catch (error) {
+                console.error('Error clearing statements:', error);
+                alert('Error clearing statements');
+            }
+        }
+
+        // Send test statement
+        async function sendTestStatement() {
+            const testStatement = {
+                actor: {
+                    name: "Test Learner",
+                    mbox: "mailto:test@example.com"
+                },
+                verb: {
+                    id: "http://adlnet.gov/expapi/verbs/completed",
+                    display: {
+                        "en-US": "completed"
+                    }
+                },
+                object: {
+                    id: "http://example.com/activities/test-activity",
+                    definition: {
+                        name: {
+                            "en-US": "Test Activity"
+                        },
+                        description: {
+                            "en-US": "A sample xAPI activity for testing"
+                        }
+                    }
+                },
+                timestamp: new Date().toISOString(),
+                result: {
+                    completion: true,
+                    success: true,
+                    score: {
+                        scaled: 0.95,
+                        raw: 95,
+                        min: 0,
+                        max: 100
+                    }
+                }
+            };
+
+            try {
+                const authHeader = 'Basic ' + btoa(credentials.key + ':' + credentials.secret);
+                
+                const response = await fetch('/xapi/statements', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authHeader,
+                        'X-Experience-API-Version': '1.0.3'
+                    },
+                    body: JSON.stringify(testStatement)
+                });
+
+                if (response.ok) {
+                    console.log('✓ Test statement sent successfully');
+                    setTimeout(refreshStatements, 500);
+                } else {
+                    const error = await response.json();
+                    console.error('Error sending test statement:', error);
+                    alert('Error sending test statement: ' + error.message);
+                }
+            } catch (error) {
+                console.error('Error sending test statement:', error);
+                alert('Error sending test statement');
+            }
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>
