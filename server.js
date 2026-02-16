@@ -200,6 +200,11 @@ app.get('/api/credentials', (req, res) => {
 
 // xAPI Statements endpoint (POST)
 app.post('/xapi/statements', validateAuth, (req, res) => {
+    // Debug: log the raw body
+    console.log('📨 Raw request body:', JSON.stringify(req.body, null, 2));
+    console.log('📨 Body type:', typeof req.body);
+    console.log('📨 Is Array?:', Array.isArray(req.body));
+    
     let statements_to_process = [];
     
     // xAPI allows both single statement and array of statements
@@ -216,6 +221,8 @@ app.post('/xapi/statements', validateAuth, (req, res) => {
     
     // Process each statement
     for (const statement of statements_to_process) {
+        console.log('🔍 Processing statement:', JSON.stringify(statement, null, 2));
+        
         // Validate statement
         const validation = validateXAPIStatement(statement);
         
@@ -247,6 +254,7 @@ app.post('/xapi/statements', validateAuth, (req, res) => {
                 id: statement.id,
                 errors: validation.errors
             });
+            console.log('  ✗ Validation errors:', validation.errors);
         }
         
         console.log(`  ✓ Stored (${validation.valid ? 'VALID' : 'INVALID'}):`, statement.id);
