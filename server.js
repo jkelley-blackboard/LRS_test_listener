@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const multer = require('multer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,8 +29,14 @@ app.use(cors({
     exposedHeaders: ['X-Experience-API-Version'],
     credentials: true
 }));
+
+// Parse different content types
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Also parse URL-encoded bodies
+
+// Multer for multipart/mixed (Blackboard uses this)
+const upload = multer();
+
 app.use(express.static('public'));
 
 // Debug middleware to log all incoming requests to /xapi/statements
@@ -215,16 +222,39 @@ app.get('/api/credentials', (req, res) => {
     });
 });
 
-// xAPI Statements endpoint (POST)
-app.post('/xapi/statements', validateAuth, (req, res) => {
+// xAPI Statements endpoint (POST) - with multipart support
+app.post('/xapi/statements', upload.any(), validateAuth, (req, res) => {
     // Debug: log the raw body
+    console.log('📨 Content-Type:', req.headers['content-type']);
     console.log('📨 Raw request body:', JSON.stringify(req.body, null, 2));
+    console.log('📨 Files:', req.files ? req.files.length : 0);
     console.log('📨 Body type:', typeof req.body);
     console.log('📨 Is Array?:', Array.isArray(req.body));
     console.log('📨 Query params:', JSON.stringify(req.query, null, 2));
     
-    // Check if statement is in query params (some LMS do this)
     let statementData = req.body;
+    
+    // Handle multipart/mixed - Blackboard sends xAPI statements this way
+    if (req.files && req.files.length > 0) {
+        console.log('📦 Multipart data detected, parsing parts...');
+        
+        // Look for JSON parts in the multipart data
+        for (const file of req.files) {
+            console.log('  Part:', file.fieldname, 'Type:', file.mimetype, 'Size:', file.size);
+            
+            if (file.mimetype === 'application/json' || file.fieldname === 'statement') {
+                try {
+                    const jsonContent = file.buffer.toString('utf-8');
+                    console.log('  📄 JSON content:', jsonContent);
+                    statementData = JSON.parse(jsonContent);
+                    console.log('  ✓ Parsed statement from multipart');
+                    break;
+                } catch (e) {
+                    console.log('  ✗ Failed to parse:', e.message);
+                }
+            }
+        }
+    }
     
     // If body is empty but we have query params, try those
     if (Object.keys(req.body).length === 0 && Object.keys(req.query).length > 0) {
@@ -317,16 +347,42 @@ app.post('/xapi/statements', validateAuth, (req, res) => {
 });
 
 // xAPI Statements endpoint (PUT) - for single statement with ID in URL
-app.put('/xapi/statements', validateAuth, (req, res) => {
-    let statements_to_process = [];
+app.put('/xapi/statements', upload.any(), validateAuth, (req, res) => {
     const statementId = req.query.statementId;
     
+    console.log('📨 PUT Content-Type:', req.headers['content-type']);
+    console.log('📨 Files:', req.files ? req.files.length : 0);
+    
+    let statementData = req.body;
+    
+    // Handle multipart/mixed
+    if (req.files && req.files.length > 0) {
+        console.log('📦 Multipart data detected in PUT, parsing parts...');
+        
+        for (const file of req.files) {
+            console.log('  Part:', file.fieldname, 'Type:', file.mimetype, 'Size:', file.size);
+            
+            if (file.mimetype === 'application/json' || file.fieldname === 'statement') {
+                try {
+                    const jsonContent = file.buffer.toString('utf-8');
+                    statementData = JSON.parse(jsonContent);
+                    console.log('  ✓ Parsed statement from multipart (PUT)');
+                    break;
+                } catch (e) {
+                    console.log('  ✗ Failed to parse:', e.message);
+                }
+            }
+        }
+    }
+    
+    let statements_to_process = [];
+    
     // xAPI allows both single statement and array of statements
-    if (Array.isArray(req.body)) {
-        statements_to_process = req.body;
+    if (Array.isArray(statementData)) {
+        statements_to_process = statementData;
         console.log(`📨 Received ${statements_to_process.length} xAPI statements (PUT - array)`);
     } else {
-        statements_to_process = [req.body];
+        statements_to_process = [statementData];
         console.log('📨 Received xAPI statement (PUT - single)');
     }
     
