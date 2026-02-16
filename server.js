@@ -198,106 +198,151 @@ app.get('/api/credentials', (req, res) => {
 
 // xAPI Statements endpoint (POST)
 app.post('/xapi/statements', validateAuth, (req, res) => {
-    const statement = req.body;
+    let statements_to_process = [];
     
-    console.log('📨 Received xAPI statement (POST)');
-    
-    // Validate statement
-    const validation = validateXAPIStatement(statement);
-    
-    // Add ID if not present
-    if (!statement.id) {
-        statement.id = generateUUID();
+    // xAPI allows both single statement and array of statements
+    if (Array.isArray(req.body)) {
+        statements_to_process = req.body;
+        console.log(`📨 Received ${statements_to_process.length} xAPI statements (POST - array)`);
+    } else {
+        statements_to_process = [req.body];
+        console.log('📨 Received xAPI statement (POST - single)');
     }
     
-    // Add stored timestamp
-    const storedStatement = {
-        ...statement,
-        stored: new Date().toISOString()
-    };
+    const statement_ids = [];
+    const errors = [];
     
-    // Store statement
-    const record = {
-        id: statement.id,
-        statement: storedStatement,
-        timestamp: new Date().toISOString(),
-        valid: validation.valid,
-        errors: validation.errors
-    };
-    
-    statements.unshift(record);
+    // Process each statement
+    for (const statement of statements_to_process) {
+        // Validate statement
+        const validation = validateXAPIStatement(statement);
+        
+        // Add ID if not present
+        if (!statement.id) {
+            statement.id = generateUUID();
+        }
+        
+        // Add stored timestamp
+        const storedStatement = {
+            ...statement,
+            stored: new Date().toISOString()
+        };
+        
+        // Store statement
+        const record = {
+            id: statement.id,
+            statement: storedStatement,
+            timestamp: new Date().toISOString(),
+            valid: validation.valid,
+            errors: validation.errors
+        };
+        
+        statements.unshift(record);
+        statement_ids.push(statement.id);
+        
+        if (!validation.valid) {
+            errors.push({
+                id: statement.id,
+                errors: validation.errors
+            });
+        }
+        
+        console.log(`  ✓ Stored (${validation.valid ? 'VALID' : 'INVALID'}):`, statement.id);
+    }
     
     // Keep only last 1000 statements
     if (statements.length > 1000) {
         statements = statements.slice(0, 1000);
     }
     
-    console.log(`  ✓ Stored (${validation.valid ? 'VALID' : 'INVALID'}):`, statement.id);
-    
     // Return appropriate response
-    if (validation.valid) {
-        res.status(200).json([statement.id]);
-    } else {
+    if (errors.length === 0) {
+        // All valid
+        res.status(200).json(statement_ids);
+    } else if (errors.length === statements_to_process.length) {
+        // All invalid
         res.status(400).json({
             error: 'Bad Request',
-            message: 'Invalid xAPI statement',
-            errors: validation.errors
+            message: 'Invalid xAPI statement(s)',
+            errors: errors
         });
+    } else {
+        // Some valid, some invalid (partial success)
+        res.status(200).json(statement_ids);
     }
 });
 
 // xAPI Statements endpoint (PUT) - for single statement with ID in URL
 app.put('/xapi/statements', validateAuth, (req, res) => {
-    const statement = req.body;
+    let statements_to_process = [];
     const statementId = req.query.statementId;
     
-    console.log('📨 Received xAPI statement (PUT)');
-    
-    // If statementId in query, use that
-    if (statementId) {
-        statement.id = statementId;
+    // xAPI allows both single statement and array of statements
+    if (Array.isArray(req.body)) {
+        statements_to_process = req.body;
+        console.log(`📨 Received ${statements_to_process.length} xAPI statements (PUT - array)`);
+    } else {
+        statements_to_process = [req.body];
+        console.log('📨 Received xAPI statement (PUT - single)');
     }
     
-    // Validate statement
-    const validation = validateXAPIStatement(statement);
+    const errors = [];
     
-    // Add ID if not present
-    if (!statement.id) {
-        statement.id = generateUUID();
+    // Process each statement
+    for (const statement of statements_to_process) {
+        // If statementId in query, use that for the first statement
+        if (statementId && statements_to_process.indexOf(statement) === 0) {
+            statement.id = statementId;
+        }
+        
+        // Validate statement
+        const validation = validateXAPIStatement(statement);
+        
+        // Add ID if not present
+        if (!statement.id) {
+            statement.id = generateUUID();
+        }
+        
+        // Add stored timestamp
+        const storedStatement = {
+            ...statement,
+            stored: new Date().toISOString()
+        };
+        
+        // Store statement
+        const record = {
+            id: statement.id,
+            statement: storedStatement,
+            timestamp: new Date().toISOString(),
+            valid: validation.valid,
+            errors: validation.errors
+        };
+        
+        statements.unshift(record);
+        
+        if (!validation.valid) {
+            errors.push({
+                id: statement.id,
+                errors: validation.errors
+            });
+        }
+        
+        console.log(`  ✓ Stored (${validation.valid ? 'VALID' : 'INVALID'}):`, statement.id);
     }
-    
-    // Add stored timestamp
-    const storedStatement = {
-        ...statement,
-        stored: new Date().toISOString()
-    };
-    
-    // Store statement
-    const record = {
-        id: statement.id,
-        statement: storedStatement,
-        timestamp: new Date().toISOString(),
-        valid: validation.valid,
-        errors: validation.errors
-    };
-    
-    statements.unshift(record);
     
     // Keep only last 1000 statements
     if (statements.length > 1000) {
         statements = statements.slice(0, 1000);
     }
     
-    console.log(`  ✓ Stored (${validation.valid ? 'VALID' : 'INVALID'}):`, statement.id);
-    
     // Return appropriate response
-    if (validation.valid) {
+    if (errors.length === 0) {
         res.status(204).end(); // PUT returns 204 No Content for success
     } else {
         res.status(400).json({
             error: 'Bad Request',
-            message: 'Invalid xAPI statement',
-            errors: validation.errors
+            message: 'Invalid xAPI statement(s)',
+            errors: errors
         });
     }
 });
