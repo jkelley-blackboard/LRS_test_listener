@@ -21,7 +21,12 @@ app.use((req, res, next) => {
     // Set xAPI version header on all responses
     res.setHeader('X-Experience-API-Version', '1.0.3');
     
-    // For xAPI endpoints, validate version
+    // Skip version check for /xapi/about and root /xapi (these endpoints don't require it)
+    if (req.path === '/xapi/about' || req.path === '/xapi') {
+        return next();
+    }
+    
+    // For other xAPI endpoints, validate version
     if (req.path.startsWith('/xapi/')) {
         const clientVersion = req.headers['x-experience-api-version'];
         
@@ -159,6 +164,26 @@ app.options('/xapi/statements', (req, res) => {
     res.setHeader('Access-Control-Max-Age', '86400');
     res.setHeader('X-Experience-API-Version', '1.0.3');
     res.status(200).end();
+});
+
+// xAPI About endpoint (required by spec) - returns LRS info
+app.get('/xapi/about', (req, res) => {
+    console.log('📋 About endpoint requested');
+    res.setHeader('X-Experience-API-Version', '1.0.3');
+    res.json({
+        version: ['1.0.3', '1.0.2', '1.0.1', '1.0.0'],
+        extensions: {}
+    });
+});
+
+// xAPI root endpoint - also return about info
+app.get('/xapi', (req, res) => {
+    console.log('📋 xAPI root endpoint requested');
+    res.setHeader('X-Experience-API-Version', '1.0.3');
+    res.json({
+        version: ['1.0.3', '1.0.2', '1.0.1', '1.0.0'],
+        extensions: {}
+    });
 });
 
 // Get credentials (for initial setup)
