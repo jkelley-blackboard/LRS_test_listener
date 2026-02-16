@@ -539,8 +539,8 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log('');
     console.log('🚀 Server running on port', PORT);
-    console.log('📍 Dashboard: http://localhost:' + PORT);
-    console.log('📍 Blackboard LRS Endpoint: http://localhost:' + PORT + '/xapi');
+    console.log('📍 Dashboard: https://localhost:' + PORT);
+    console.log('📍 Blackboard LRS Endpoint: https://localhost:' + PORT + '/xapi');
     console.log('');
     console.log('Configure in Blackboard Learn → Admin → LTI Tool Providers:');
     console.log('  Endpoint: https://your-domain.onrender.com/xapi (must use HTTPS)');
