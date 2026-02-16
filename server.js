@@ -29,7 +29,24 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // Also parse URL-encoded bodies
 app.use(express.static('public'));
+
+// Debug middleware to log all incoming requests to /xapi/statements
+app.use('/xapi/statements', (req, res, next) => {
+    console.log('='.repeat(60));
+    console.log('📥 Incoming Request to /xapi/statements');
+    console.log('Method:', req.method);
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Content-Length:', req.headers['content-length']);
+    console.log('Authorization:', req.headers['authorization'] ? 'Present' : 'Missing');
+    console.log('X-Experience-API-Version:', req.headers['x-experience-api-version']);
+    console.log('All Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Query Params:', JSON.stringify(req.query, null, 2));
+    console.log('Body (parsed):', JSON.stringify(req.body, null, 2));
+    console.log('='.repeat(60));
+    next();
+});
 
 // xAPI Version middleware - MUST be before routes
 app.use((req, res, next) => {
@@ -204,15 +221,32 @@ app.post('/xapi/statements', validateAuth, (req, res) => {
     console.log('📨 Raw request body:', JSON.stringify(req.body, null, 2));
     console.log('📨 Body type:', typeof req.body);
     console.log('📨 Is Array?:', Array.isArray(req.body));
+    console.log('📨 Query params:', JSON.stringify(req.query, null, 2));
+    
+    // Check if statement is in query params (some LMS do this)
+    let statementData = req.body;
+    
+    // If body is empty but we have query params, try those
+    if (Object.keys(req.body).length === 0 && Object.keys(req.query).length > 0) {
+        console.log('⚠️ Body is empty, checking query params...');
+        if (req.query.statement) {
+            try {
+                statementData = JSON.parse(req.query.statement);
+                console.log('✓ Found statement in query param');
+            } catch (e) {
+                console.log('✗ Failed to parse statement from query param');
+            }
+        }
+    }
     
     let statements_to_process = [];
     
     // xAPI allows both single statement and array of statements
-    if (Array.isArray(req.body)) {
-        statements_to_process = req.body;
+    if (Array.isArray(statementData)) {
+        statements_to_process = statementData;
         console.log(`📨 Received ${statements_to_process.length} xAPI statements (POST - array)`);
     } else {
-        statements_to_process = [req.body];
+        statements_to_process = [statementData];
         console.log('📨 Received xAPI statement (POST - single)');
     }
     
