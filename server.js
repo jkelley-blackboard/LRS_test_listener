@@ -5,6 +5,21 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// In-memory storage for statements
+let statements = [];
+let lrsCredentials = {
+    key: process.env.XAPI_KEY || 'key',
+    secret: process.env.XAPI_SECRET || 'secret'
+};
+
+console.log('='.repeat(60));
+console.log('🎓 xAPI LRS Server for Blackboard SCORM Content');
+console.log('='.repeat(60));
+console.log('Credentials:');
+console.log('  Key:', lrsCredentials.key);
+console.log('  Secret:', lrsCredentials.secret);
+console.log('='.repeat(60));
+
 // Middleware
 app.use(cors({
     origin: '*',
@@ -69,7 +84,7 @@ function validateAuth(req, res, next) {
         const credentials_str = Buffer.from(base64Credentials, 'base64').toString('utf8');
         const [key, secret] = credentials_str.split(':');
 
-        if (key !== credentials.key || secret !== credentials.secret) {
+        if (key !== lrsCredentials.key || secret !== lrsCredentials.secret) {
             return res.status(401).json({
                 error: 'Unauthorized',
                 message: 'Invalid credentials'
@@ -178,8 +193,8 @@ app.get('/api/credentials', (req, res) => {
     res.json({
         host: req.protocol + '://' + req.get('host'),
         endpoint: req.protocol + '://' + req.get('host') + '/xapi',
-        key: credentials.key,
-        secret: credentials.secret
+        key: lrsCredentials.key,
+        secret: lrsCredentials.secret
     });
 });
 
@@ -384,8 +399,8 @@ app.listen(PORT, () => {
     console.log('');
     console.log('Configure in Blackboard Learn → Admin → LTI Tool Providers:');
     console.log('  Endpoint: https://your-domain.onrender.com/xapi (must use HTTPS)');
-    console.log('  Key:', credentials.key);
-    console.log('  Secret:', credentials.secret);
+    console.log('  Key:', lrsCredentials.key);
+    console.log('  Secret:', lrsCredentials.secret);
     console.log('='.repeat(60));
 });
 
