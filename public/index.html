@@ -329,6 +329,16 @@
             </div>
         </div>
 
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="margin: 0 0 10px 0; color: #856404;">⚠️ Disclaimer</h3>
+            <ul style="margin: 0; padding-left: 20px; color: #856404; line-height: 1.6;">
+                <li><strong>This is experimental software for demonstration and testing purposes only</strong> and should not be used in a production setting</li>
+                <li>No support or warranty is provided</li>
+                <li>Blackboard Inc retains copyright</li>
+                <li>For questions, contact: <a href="mailto:jeff.kelley@anthology.com" style="color: #856404; text-decoration: underline;">jeff.kelley@anthology.com</a></li>
+            </ul>
+        </div>
+
         <div class="config-section">
             <h3>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -362,9 +372,9 @@
 
             <div class="endpoint-info">
                 <strong>💡 How to configure in Blackboard Learn:</strong><br>
-                1. Go to <strong>Admin Panel → Building Blocks → Installed Tools → SCORM Engine → Settings </strong><br>
-                2. Enable Use External LRS (and optionally Convert non...)<br>
-                3. Add new LRS and enter the <strong>Endpoint URL ending in /xapi</strong> (must be HTTPS)<br>
+                1. Go to <strong>Admin Panel → Building Blocks → Installed Tools → SCORM Engine → Settings</strong><br>
+                2. Enable <strong>Use External LRS</strong> (and optionally Convert non...)<br>
+                3. <strong>Add new LRS</strong> and enter the <strong>Endpoint URL ending in /xapi</strong> (must be HTTPS)<br>
                 4. Enter <strong>Key: key</strong><br>
                 5. Enter <strong>Secret: secret</strong><br>
                 6. Upload your SCORM package in a course<br>
@@ -440,8 +450,12 @@
                 
                 // Override with our display values, but use server's endpoint
                 credentials.endpoint = serverCreds.endpoint;
-                // Convert endpoint from /xapi/statements to /xapi for Blackboard
-                credentials.endpoint = credentials.endpoint.replace('/xapi/statements', '/xapi');
+                
+                // Force HTTPS for production (Render always uses HTTPS externally)
+                if (window.location.hostname !== 'localhost' && !credentials.endpoint.startsWith('https://')) {
+                    credentials.endpoint = credentials.endpoint.replace('http://', 'https://');
+                }
+                
                 credentials.key = 'key';
                 credentials.secret = 'secret';
                 

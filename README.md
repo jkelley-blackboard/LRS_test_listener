@@ -2,6 +2,13 @@
 
 A lightweight xAPI Learning Record Store (LRS) specifically designed for tracking Blackboard Learn SCORM content.
 
+## ⚠️ Disclaimer
+
+- **This is experimental software for demonstration and testing purposes only** and should not be used in a production setting
+- No support or warranty is provided
+- Blackboard Inc retains copyright
+- For questions, contact: jeff.kelley@anthology.com
+
 ## Features
 
 - ✅ xAPI 1.0.3 compliant for Blackboard Learn
