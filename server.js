@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const multer = require('multer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,13 +29,26 @@ app.use(cors({
     credentials: true
 }));
 
-// Parse different content types
+// Parse different content types - but use raw for multipart
+app.use((req, res, next) => {
+    const contentType = req.headers['content-type'] || '';
+    
+    if (contentType.includes('multipart/mixed')) {
+        // Capture raw body for multipart/mixed
+        let data = '';
+        req.setEncoding('utf8');
+        req.on('data', chunk => { data += chunk; });
+        req.on('end', () => {
+            req.rawBody = data;
+            next();
+        });
+    } else {
+        next();
+    }
+});
+
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // Also parse URL-encoded bodies
-
-// Multer for multipart/mixed (Blackboard uses this)
-const upload = multer();
-
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 // Debug middleware to log all incoming requests to /xapi/statements
@@ -91,6 +103,47 @@ app.use((req, res, next) => {
 });
 
 
+
+// Parse multipart/mixed data (used by Blackboard)
+function parseMultipartMixed(rawBody, boundary) {
+    console.log('🔍 Parsing multipart/mixed with boundary:', boundary);
+    
+    const parts = rawBody.split('--' + boundary);
+    
+    for (let part of parts) {
+        part = part.trim();
+        if (!part || part === '--') continue;
+        
+        console.log('📦 Processing part (length:', part.length, ')');
+        
+        // Split headers and body
+        const headerEndIndex = part.indexOf('\r\n\r\n');
+        if (headerEndIndex === -1) continue;
+        
+        const headers = part.substring(0, headerEndIndex);
+        const body = part.substring(headerEndIndex + 4);
+        
+        console.log('  Headers:', headers);
+        
+        // Check if this is a JSON part
+        if (headers.includes('application/json') || headers.includes('Content-Type: application/json')) {
+            console.log('  ✓ Found JSON part, length:', body.length);
+            console.log('  Body preview:', body.substring(0, 200));
+            
+            try {
+                const jsonData = JSON.parse(body.trim());
+                console.log('  ✅ Successfully parsed JSON');
+                return jsonData;
+            } catch (e) {
+                console.log('  ❌ JSON parse error:', e.message);
+                console.log('  Body:', body);
+            }
+        }
+    }
+    
+    console.log('⚠️ No JSON part found in multipart data');
+    return null;
+}
 
 // Basic Auth middleware
 function validateAuth(req, res, next) {
@@ -223,41 +276,39 @@ app.get('/api/credentials', (req, res) => {
 });
 
 // xAPI Statements endpoint (POST) - with multipart support
-app.post('/xapi/statements', upload.any(), validateAuth, (req, res) => {
-    // Debug: log the raw body
-    console.log('📨 Content-Type:', req.headers['content-type']);
-    console.log('📨 Raw request body:', JSON.stringify(req.body, null, 2));
-    console.log('📨 Files:', req.files ? req.files.length : 0);
+app.post('/xapi/statements', validateAuth, (req, res) => {
+    const contentType = req.headers['content-type'] || '';
+    
+    console.log('📨 Content-Type:', contentType);
+    console.log('📨 Has rawBody?:', !!req.rawBody);
     console.log('📨 Body type:', typeof req.body);
-    console.log('📨 Is Array?:', Array.isArray(req.body));
-    console.log('📨 Query params:', JSON.stringify(req.query, null, 2));
     
     let statementData = req.body;
     
     // Handle multipart/mixed - Blackboard sends xAPI statements this way
-    if (req.files && req.files.length > 0) {
-        console.log('📦 Multipart data detected, parsing parts...');
+    if (contentType.includes('multipart/mixed') && req.rawBody) {
+        console.log('📦 Multipart/mixed detected, raw body length:', req.rawBody.length);
         
-        // Look for JSON parts in the multipart data
-        for (const file of req.files) {
-            console.log('  Part:', file.fieldname, 'Type:', file.mimetype, 'Size:', file.size);
+        // Extract boundary from Content-Type header
+        const boundaryMatch = contentType.match(/boundary=([^;]+)/);
+        if (boundaryMatch) {
+            const boundary = boundaryMatch[1];
+            console.log('  Boundary:', boundary);
             
-            if (file.mimetype === 'application/json' || file.fieldname === 'statement') {
-                try {
-                    const jsonContent = file.buffer.toString('utf-8');
-                    console.log('  📄 JSON content:', jsonContent);
-                    statementData = JSON.parse(jsonContent);
-                    console.log('  ✓ Parsed statement from multipart');
-                    break;
-                } catch (e) {
-                    console.log('  ✗ Failed to parse:', e.message);
-                }
+            const parsed = parseMultipartMixed(req.rawBody, boundary);
+            if (parsed) {
+                statementData = parsed;
+                console.log('  ✅ Extracted statement from multipart');
+            } else {
+                console.log('  ❌ Failed to extract statement from multipart');
             }
+        } else {
+            console.log('  ❌ No boundary found in Content-Type');
         }
     }
     
-    // If body is empty but we have query params, try those
-    if (Object.keys(req.body).length === 0 && Object.keys(req.query).length > 0) {
+    // If body is still empty, check query params
+    if ((!statementData || Object.keys(statementData).length === 0) && Object.keys(req.query).length > 0) {
         console.log('⚠️ Body is empty, checking query params...');
         if (req.query.statement) {
             try {
@@ -285,7 +336,7 @@ app.post('/xapi/statements', upload.any(), validateAuth, (req, res) => {
     
     // Process each statement
     for (const statement of statements_to_process) {
-        console.log('🔍 Processing statement:', JSON.stringify(statement, null, 2));
+        console.log('🔍 Processing statement:', JSON.stringify(statement, null, 2).substring(0, 500));
         
         // Validate statement
         const validation = validateXAPIStatement(statement);
@@ -347,30 +398,26 @@ app.post('/xapi/statements', upload.any(), validateAuth, (req, res) => {
 });
 
 // xAPI Statements endpoint (PUT) - for single statement with ID in URL
-app.put('/xapi/statements', upload.any(), validateAuth, (req, res) => {
+app.put('/xapi/statements', validateAuth, (req, res) => {
     const statementId = req.query.statementId;
+    const contentType = req.headers['content-type'] || '';
     
-    console.log('📨 PUT Content-Type:', req.headers['content-type']);
-    console.log('📨 Files:', req.files ? req.files.length : 0);
+    console.log('📨 PUT Content-Type:', contentType);
+    console.log('📨 Has rawBody?:', !!req.rawBody);
     
     let statementData = req.body;
     
     // Handle multipart/mixed
-    if (req.files && req.files.length > 0) {
-        console.log('📦 Multipart data detected in PUT, parsing parts...');
+    if (contentType.includes('multipart/mixed') && req.rawBody) {
+        console.log('📦 Multipart/mixed detected in PUT');
         
-        for (const file of req.files) {
-            console.log('  Part:', file.fieldname, 'Type:', file.mimetype, 'Size:', file.size);
-            
-            if (file.mimetype === 'application/json' || file.fieldname === 'statement') {
-                try {
-                    const jsonContent = file.buffer.toString('utf-8');
-                    statementData = JSON.parse(jsonContent);
-                    console.log('  ✓ Parsed statement from multipart (PUT)');
-                    break;
-                } catch (e) {
-                    console.log('  ✗ Failed to parse:', e.message);
-                }
+        const boundaryMatch = contentType.match(/boundary=([^;]+)/);
+        if (boundaryMatch) {
+            const boundary = boundaryMatch[1];
+            const parsed = parseMultipartMixed(req.rawBody, boundary);
+            if (parsed) {
+                statementData = parsed;
+                console.log('  ✅ Extracted statement from multipart (PUT)');
             }
         }
     }
