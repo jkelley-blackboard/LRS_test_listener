@@ -51,20 +51,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// In-memory storage for statements
-let statements = [];
-let credentials = {
-    key: process.env.XAPI_KEY || 'demo-key-' + Math.random().toString(36).substring(7),
-    secret: process.env.XAPI_SECRET || 'demo-secret-' + Math.random().toString(36).substring(7)
-};
 
-console.log('='.repeat(60));
-console.log('🎓 xAPI LRS Server Starting...');
-console.log('='.repeat(60));
-console.log('Credentials:');
-console.log('  Key:', credentials.key);
-console.log('  Secret:', credentials.secret);
-console.log('='.repeat(60));
 
 // Basic Auth middleware
 function validateAuth(req, res, next) {
@@ -190,7 +177,7 @@ app.get('/xapi', (req, res) => {
 app.get('/api/credentials', (req, res) => {
     res.json({
         host: req.protocol + '://' + req.get('host'),
-        endpoint: req.protocol + '://' + req.get('host') + '/xapi/statements',
+        endpoint: req.protocol + '://' + req.get('host') + '/xapi',
         key: credentials.key,
         secret: credentials.secret
     });
@@ -393,10 +380,10 @@ app.listen(PORT, () => {
     console.log('');
     console.log('🚀 Server running on port', PORT);
     console.log('📍 Dashboard: http://localhost:' + PORT);
-    console.log('📍 xAPI Endpoint: http://localhost:' + PORT + '/xapi/statements');
+    console.log('📍 Blackboard LRS Endpoint: http://localhost:' + PORT + '/xapi');
     console.log('');
-    console.log('Configure your xAPI source with:');
-    console.log('  Endpoint: http://localhost:' + PORT + '/xapi/statements');
+    console.log('Configure in Blackboard Learn → Admin → LTI Tool Providers:');
+    console.log('  Endpoint: https://your-domain.onrender.com/xapi (must use HTTPS)');
     console.log('  Key:', credentials.key);
     console.log('  Secret:', credentials.secret);
     console.log('='.repeat(60));

@@ -1,15 +1,15 @@
-# xAPI LRS Listener
+# Blackboard Learn SCORM xAPI Listener
 
-A lightweight, deployable xAPI (Experience API) Learning Record Store listener with authentication.
+A lightweight xAPI Learning Record Store (LRS) specifically designed for tracking Blackboard Learn SCORM content.
 
 ## Features
 
-- ✅ xAPI 1.0.3 compliant statement validation
-- 🔐 HTTP Basic Authentication (Key + Secret)
-- 📊 Real-time dashboard to view incoming statements
-- 🎯 Valid/Invalid statement tracking
+- ✅ xAPI 1.0.3 compliant for Blackboard Learn
+- 🎓 Designed for SCORM content tracking
+- 🔐 Simple authentication (Key: `key`, Secret: `secret`)
+- 📊 Real-time dashboard to view SCORM interactions
 - 🧪 Built-in test statement sender
-- 🚀 Easy deployment to Render.com or Railway.app
+- 🚀 Easy deployment to Render.com (FREE with HTTPS)
 
 ## Quick Start (Local Development)
 
@@ -25,9 +25,11 @@ npm start
 
 3. Open your browser to `http://localhost:3000`
 
-4. Copy the credentials shown in the dashboard to your xAPI source system
+**Note:** Blackboard requires HTTPS, so local testing won't work with actual Blackboard integration. You must deploy to get HTTPS.
 
-## Deploy to Render.com (FREE)
+## Deploy to Render.com (FREE + HTTPS Required for Blackboard)
+
+Blackboard Learn requires HTTPS endpoints. Render.com provides free HTTPS hosting.
 
 1. Push this code to a GitHub repository
 
@@ -38,7 +40,7 @@ npm start
 4. Connect your GitHub repository
 
 5. Configure:
-   - **Name**: `xapi-lrs-listener` (or whatever you prefer)
+   - **Name**: `blackboard-scorm-lrs` (or whatever you prefer)
    - **Environment**: `Node`
    - **Build Command**: `npm install`
    - **Start Command**: `npm start`
@@ -48,93 +50,88 @@ npm start
 
 7. Wait for deployment (2-3 minutes)
 
-8. Your LRS will be available at: `https://your-app-name.onrender.com`
+8. Your LRS will be available at: `https://your-app-name.onrender.com` (with HTTPS!)
 
-9. Visit the URL to get your credentials!
+9. Visit the URL to see your endpoint!
 
-### Optional: Set Custom Credentials on Render
+## Configure in Blackboard Learn
 
-Add environment variables in Render dashboard:
-- `XAPI_KEY`: Your custom key
-- `XAPI_SECRET`: Your custom secret
+After deploying, configure your SCORM package or LTI settings:
 
-## Deploy to Railway.app (FREE)
+### Method 1: SCORM Package Configuration
+1. Before uploading SCORM package, edit the package settings
+2. Enable xAPI tracking
+3. Enter LRS details:
+   - **Endpoint**: `https://your-app-name.onrender.com/xapi`
+   - **Key**: `key`
+   - **Secret**: `secret`
 
-1. Push this code to a GitHub repository
+### Method 2: Blackboard LTI Tool Provider (System-wide)
+1. Go to **Admin Panel** → **Tools and Utilities** → **LTI Tool Providers**
+2. Click **Register Provider Domain**
+3. Enter:
+   - **Provider Domain**: `your-app-name.onrender.com`
+   - **LRS Endpoint**: `https://your-app-name.onrender.com/xapi`
+   - **Key**: `key`
+   - **Secret**: `secret`
+4. Save configuration
 
-2. Go to [Railway.app](https://railway.app) and sign up/login
+### Method 3: Building Block or Content Handler
+Check your SCORM upload settings for xAPI/LRS configuration fields.
 
-3. Click "New Project" → "Deploy from GitHub repo"
+## Testing
 
-4. Select your repository
+After configuration:
+1. Have a student (or test account) access the SCORM content in Blackboard
+2. View the dashboard at `https://your-app-name.onrender.com`
+3. You should see statements like:
+   - "Student initialized the course"
+   - "Student completed Module 1"
+   - "Student scored 95% on Quiz 2"
 
-5. Railway will auto-detect Node.js and deploy
+## What You'll See
 
-6. Click on your deployment → "Settings" → "Generate Domain"
-
-7. Your LRS will be available at the generated domain!
-
-### Optional: Set Custom Credentials on Railway
-
-In the "Variables" tab, add:
-- `XAPI_KEY`: Your custom key
-- `XAPI_SECRET`: Your custom secret
-
-## Using with Your xAPI Source System
-
-After deployment, you'll get:
-
-1. **Endpoint URL**: `https://your-app.onrender.com/xapi/statements`
-2. **Key**: Shown in the dashboard (or your custom key)
-3. **Secret**: Shown in the dashboard (or your custom secret)
-
-Enter these three values in your xAPI source system (LMS, authoring tool, etc.)
-
-## Supported xAPI Source Systems
-
-This LRS works with:
-- Articulate Storyline 360
-- Adobe Captivate
-- Adapt Learning
-- H5P
-- Any xAPI-compliant content or LMS
+The LRS captures all SCORM interactions:
+- ✅ Course launches
+- ✅ Page views
+- ✅ Completions
+- ✅ Quiz attempts and scores
+- ✅ Time spent
+- ✅ Progress tracking
 
 ## API Endpoints
 
-### POST `/xapi/statements`
+### `GET /xapi` or `GET /xapi/about`
+Returns LRS version info (used by Blackboard for validation)
+
+### `POST /xapi/statements`
 Submit xAPI statements (requires Basic Auth)
 
 **Headers:**
 ```
-Authorization: Basic base64(key:secret)
+Authorization: Basic a2V5OnNlY3JldA==  (base64 of "key:secret")
 Content-Type: application/json
 X-Experience-API-Version: 1.0.3
 ```
 
-**Body:** xAPI statement JSON
-
-### GET `/xapi/statements`
+### `GET /xapi/statements`
 Retrieve statements (requires Basic Auth)
 
-### GET `/api/statements`
+### `GET /api/statements`
 Get all statements for dashboard (no auth)
 
-### GET `/api/credentials`
-Get server credentials (no auth)
-
-### DELETE `/api/statements`
+### `DELETE /api/statements`
 Clear all statements (no auth)
 
-## Statement Validation
+## Credentials
 
-The LRS validates:
-- ✅ Required properties (actor, verb, object)
-- ✅ Actor IFI (Inverse Functional Identifier)
-- ✅ Verb ID (must be valid IRI/URL)
-- ✅ Activity ID (must be valid IRI/URL)
-- ✅ Timestamp format (ISO 8601)
+**Fixed credentials for simplicity:**
+- **Key**: `key`
+- **Secret**: `secret`
 
-Invalid statements are stored but flagged for review.
+To use custom credentials, set environment variables:
+- `XAPI_KEY`: Your custom key
+- `XAPI_SECRET`: Your custom secret
 
 ## Limitations
 
@@ -142,18 +139,27 @@ Invalid statements are stored but flagged for review.
 - Stores statements in memory (cleared on restart)
 - Limited to 1000 most recent statements
 - No persistent storage or database
-- Single server instance only
+- Not for production use with thousands of students
 
-For production use with thousands of statements, consider:
-- Learning Locker (open source)
+For production Blackboard deployments, consider:
+- Learning Locker (open source, self-hosted)
 - Watershed LRS (commercial)
-- SCORM Cloud (commercial)
+- Veracity Learning (commercial)
 
-## Environment Variables
+## Troubleshooting
 
-- `PORT`: Server port (default: 3000)
-- `XAPI_KEY`: Authentication key (auto-generated if not set)
-- `XAPI_SECRET`: Authentication secret (auto-generated if not set)
+**"xAPI Version 1.0.3 is invalid or not supported"**
+- Make sure you're using the `/xapi` endpoint (not `/xapi/statements`)
+- Verify you deployed and are using HTTPS
+
+**"Unauthorized" or "Invalid credentials"**
+- Double-check Key: `key` and Secret: `secret` (lowercase)
+- Verify Basic Auth is enabled in Blackboard
+
+**No statements appearing**
+- Check Render logs for incoming requests
+- Verify SCORM package has xAPI enabled
+- Test with the "Send Test Statement" button first
 
 ## License
 
